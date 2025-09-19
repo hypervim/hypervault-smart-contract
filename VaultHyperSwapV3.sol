@@ -334,16 +334,11 @@ interface IVault{
 interface IStaking{
     function vault(address) external view returns(address);
 }
-interface ITrade {
-    function swapProxyArray(
-        uint256 _index
-    ) external view returns (address _swapRouter);
-}
+
 contract VaultHyperSwapV3 {
     INonfungiblePositionManager public positionManager;
     address public operator;
     address public stake;
-    address public trade;
     mapping(address => bool) public isVault;
     mapping (address => uint256) public allocateBalance;
     constructor() {
@@ -355,9 +350,8 @@ contract VaultHyperSwapV3 {
         require(operator == msg.sender, "VaultHyperSwapV3: caller is not the operator");
         _;
     }
-    function setHV(address _stake, address _trade) public onlyOperator{
+    function setHV(address _stake) public onlyOperator{
         stake = _stake;
-        trade = _trade;
     }
     function setOperator(address _operator) external onlyOperator {
         require(_operator != address(0), "Invalid operator address");
