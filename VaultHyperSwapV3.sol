@@ -373,18 +373,19 @@ contract VaultHyperSwapV3 {
         uint256 amountA,
         uint256 amountB
     ) external onlyOperator returns (uint256 tokenId) {
-        allocateBalance[tokenA] += amountA;
-        allocateBalance[tokenB] += amountB;
         address _vaultA = IStaking(stake).vault(tokenA);
         address _vaultB = IStaking(stake).vault(tokenB);
         require(_vaultA != address(0) && _vaultB != address(0), "Vault not found");
         uint256 _balanceA = IERC20(tokenA).balanceOf(address(this));
         uint256 _balanceB = IERC20(tokenB).balanceOf(address(this));
-        if(_balanceA < amountA)
+        if(_balanceA < amountA){
+            allocateBalance[tokenA] += amountA;
             IVault(_vaultA).withdraw(tokenA, amountA - _balanceA);
-        if(_balanceB < amountB)
-            IVault(_vaultB).withdraw(tokenB, amountB);
-        
+        }
+        if(_balanceB < amountB){
+            allocateBalance[tokenB] += amountB;
+            IVault(_vaultB).withdraw(tokenB, amountB - _balanceB);
+        }
         IERC20(tokenA).approve(address(positionManager), amountA);
         IERC20(tokenB).approve(address(positionManager), amountB);
         

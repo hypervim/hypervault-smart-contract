@@ -363,8 +363,8 @@ contract VaultKittenSwapV3 {
     address public stake;
     IFarmingCenter public FarmingCenter;
     IUniswapV3Factory public factory;
-    address public rewardToken = 0x618275F8EFE54c2afa87bfB9F210A52F0fF89364;
     address public bonusRewardToken = 0x5555555555555555555555555555555555555555; // WHYPE
+    address public KITTEN = 0x618275F8EFE54c2afa87bfB9F210A52F0fF89364; // KITTEN
     mapping (address => uint256) public allocateBalance;
     mapping (address => uint256) public keyNonce;
     constructor() {
@@ -407,18 +407,20 @@ contract VaultKittenSwapV3 {
         uint256 amountA,
         uint256 amountB
     ) external onlyOperator returns (uint256 tokenId) {
-        allocateBalance[tokenA] += amountA;
-        allocateBalance[tokenB] += amountB;
         address pool = factory.poolByPair(tokenA, tokenB);
         address _vaultA = IStaking(stake).vault(tokenA);
         address _vaultB = IStaking(stake).vault(tokenB);
         require(_vaultA != address(0) && _vaultB != address(0), "Vault not found");
         uint256 _balanceA = IERC20(tokenA).balanceOf(address(this));
         uint256 _balanceB = IERC20(tokenB).balanceOf(address(this));
-        if(_balanceA < amountA)
+        if(_balanceA < amountA){
+            allocateBalance[tokenA] += amountA;
             IVault(_vaultA).withdraw(tokenA, amountA - _balanceA);
-        if(_balanceB < amountB)
+        }
+        if(_balanceB < amountB){
+            allocateBalance[tokenB] += amountB;
             IVault(_vaultB).withdraw(tokenB, amountB - _balanceB);
+        }
         
         IERC20(tokenA).approve(address(positionManager), amountA);
         IERC20(tokenB).approve(address(positionManager), amountB);
@@ -442,7 +444,7 @@ contract VaultKittenSwapV3 {
         // Approve tokenId
         positionManager.approveForFarming{value: 0}(tokenId, true, address(FarmingCenter));
         IncentiveKey memory _key = IncentiveKey({
-            rewardToken: rewardToken,
+            rewardToken: KITTEN,
             bonusRewardToken: bonusRewardToken,
             pool: pool,
             nonce: keyNonce[pool]
@@ -463,7 +465,7 @@ contract VaultKittenSwapV3 {
         uint256 _balanceB = IERC20(tokenB).balanceOf(address(this));
         // Collect Farming Rewards
         IncentiveKey memory _key = IncentiveKey({
-            rewardToken: rewardToken,
+            rewardToken: KITTEN,
             bonusRewardToken: bonusRewardToken,
             pool: factory.poolByPair(tokenA, tokenB),
             nonce: keyNonce[factory.poolByPair(tokenA, tokenB)]
@@ -508,7 +510,7 @@ contract VaultKittenSwapV3 {
         uint256 _balanceA = IERC20(tokenA).balanceOf(address(this));
         uint256 _balanceB = IERC20(tokenB).balanceOf(address(this));
         // Collect Farming Rewards
-        IncentiveKey memory _key = IncentiveKey({rewardToken: rewardToken, bonusRewardToken: bonusRewardToken, pool: factory.poolByPair(tokenA, tokenB), nonce: keyNonce[factory.poolByPair(tokenA, tokenB)]});
+        IncentiveKey memory _key = IncentiveKey({rewardToken: KITTEN, bonusRewardToken: bonusRewardToken, pool: factory.poolByPair(tokenA, tokenB), nonce: keyNonce[factory.poolByPair(tokenA, tokenB)]});
         FarmingCenter.collectRewards(_key, tokenId);
         _collect2Reward();
 
@@ -540,7 +542,7 @@ contract VaultKittenSwapV3 {
         depositToVaults(tokenA, tokenB);
     }
     function _collect2Reward() internal {
-        FarmingCenter.claimReward(rewardToken, address(this), type(uint256).max);
+        FarmingCenter.claimReward(KITTEN, address(this), type(uint256).max);
         FarmingCenter.claimReward(bonusRewardToken, address(this), type(uint256).max);
     }
     function removeLiquidity(uint256 tokenId) external onlyOperator{
@@ -548,7 +550,7 @@ contract VaultKittenSwapV3 {
         uint256 _balanceA = IERC20(tokenA).balanceOf(address(this));
         uint256 _balanceB = IERC20(tokenB).balanceOf(address(this));
         // unstake lp
-        IncentiveKey memory _key = IncentiveKey({rewardToken: rewardToken, bonusRewardToken: bonusRewardToken, pool: factory.poolByPair(tokenA, tokenB), nonce: keyNonce[factory.poolByPair(tokenA, tokenB)]});
+        IncentiveKey memory _key = IncentiveKey({rewardToken: KITTEN, bonusRewardToken: bonusRewardToken, pool: factory.poolByPair(tokenA, tokenB), nonce: keyNonce[factory.poolByPair(tokenA, tokenB)]});
         FarmingCenter.exitFarming(_key, tokenId);
         _collect2Reward();
         _decreaseLiquidity(tokenId, liquidity);
@@ -597,6 +599,15 @@ contract VaultKittenSwapV3 {
         if(_balanceB > 0){
             IERC20(tokenB).approve(_vaultB, _balanceB);
             IVault(_vaultB).deposit(tokenB, _balanceB);
+        }
+    }
+    function depositKITTENToVault() external onlyOperator {
+        address _vault = IStaking(stake).vault(KITTEN);
+        require(_vault != address(0), "Vault not found");
+        uint256 _balanceA = IERC20(KITTEN).balanceOf(address(this));
+        if(_balanceA > 0){
+            IERC20(KITTEN).approve(_vault, _balanceA);
+            IVault(_vault).deposit(KITTEN, _balanceA);
         }
     }
     function getBalance(address _token) external view returns(uint256) {
