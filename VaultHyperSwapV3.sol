@@ -371,7 +371,10 @@ contract VaultHyperSwapV3 {
         int24 tickLower,
         int24 tickUpper,
         uint256 amountA,
-        uint256 amountB
+        uint256 amountB,
+        uint256 amount0Min,
+        uint256 amount1Min,
+        uint256 deadline
     ) external onlyOperator returns (uint256 tokenId) {
         address _vaultA = IStaking(stake).vault(tokenA);
         address _vaultB = IStaking(stake).vault(tokenB);
@@ -397,10 +400,10 @@ contract VaultHyperSwapV3 {
             tickUpper: tickUpper,
             amount0Desired: amountA,
             amount1Desired: amountB,
-            amount0Min: 0,
-            amount1Min: 0,
+            amount0Min: amount0Min,
+            amount1Min: amount1Min,
             recipient: address(this),
-            deadline: block.timestamp + 1200
+            deadline: deadline
         });
         
         (tokenId,,,) = positionManager.mint(params);
@@ -409,7 +412,10 @@ contract VaultHyperSwapV3 {
     function increaseLiquidity(
         uint256 tokenId,
         uint256 amountA,
-        uint256 amountB
+        uint256 amountB,
+        uint256 amount0Min,
+        uint256 amount1Min,
+        uint256 deadline
     ) external onlyOperator{
         (,, address tokenA, address tokenB,,,,,,,,) = positionManager.positions(tokenId);
         address _vaultA = IStaking(stake).vault(tokenA);
@@ -433,32 +439,32 @@ contract VaultHyperSwapV3 {
             tokenId: tokenId,
             amount0Desired: amountA,
             amount1Desired: amountB,
-            amount0Min: 0,
-            amount1Min: 0,
-            deadline: block.timestamp + 1200
+            amount0Min: amount0Min,
+            amount1Min: amount1Min,
+            deadline: deadline
         }));
     }
 
-    function _decreaseLiquidity(uint256 tokenId, uint128 liquidity) internal {
+    function _decreaseLiquidity(uint256 tokenId, uint128 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 deadline) internal {
         positionManager.decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams({
             tokenId: tokenId,
             liquidity: liquidity,
-            amount0Min: 0,
-            amount1Min: 0,
-            deadline: block.timestamp + 1200
+            amount0Min: amount0Min,
+            amount1Min: amount1Min,
+            deadline: deadline
         }));
     }
 
-    function decreaseLiquidity(uint256 tokenId, uint128 liquidity) external onlyOperator {
+    function decreaseLiquidity(uint256 tokenId, uint128 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 deadline) external onlyOperator {
         (,, address tokenA, address tokenB,,,,,,,,) = positionManager.positions(tokenId);
         uint256 _balanceA = IERC20(tokenA).balanceOf(address(this));
         uint256 _balanceB = IERC20(tokenB).balanceOf(address(this));
         positionManager.decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams({
             tokenId: tokenId,
             liquidity: liquidity,
-            amount0Min: 0,
-            amount1Min: 0,
-            deadline: block.timestamp + 1200
+            amount0Min: amount0Min,
+            amount1Min: amount1Min,
+            deadline: deadline
         }));
         positionManager.collect(INonfungiblePositionManager.CollectParams({
             tokenId: tokenId,
@@ -481,11 +487,11 @@ contract VaultHyperSwapV3 {
         depositToVaults(tokenA, tokenB);
     }
 
-    function removeLiquidity(uint256 tokenId) external onlyOperator{
+    function removeLiquidity(uint256 tokenId, uint256 amount0Min, uint256 amount1Min, uint256 deadline) external onlyOperator{
         (,,address tokenA, address tokenB,,,,uint128 liquidity,,,,) = positionManager.positions(tokenId);
         uint256 _balanceA = IERC20(tokenA).balanceOf(address(this));
         uint256 _balanceB = IERC20(tokenB).balanceOf(address(this));
-        _decreaseLiquidity(tokenId, liquidity);
+        _decreaseLiquidity(tokenId, liquidity, amount0Min, amount1Min, deadline);
         positionManager.collect(INonfungiblePositionManager.CollectParams({
             tokenId: tokenId,
             recipient: address(this),
@@ -538,5 +544,33 @@ contract VaultHyperSwapV3 {
     }
     function getOtherProtocolBalance(address _token) external view returns(uint256){
         return allocateBalance[_token];
+    }
+
+    /**
+     * @dev Calculate minimum amounts with slippage tolerance
+     * @param amount0Desired The desired amount of token0
+     * @param amount1Desired The desired amount of token1
+     * @param slippageBps Slippage tolerance in basis points (e.g., 100 = 1%)
+     * @return amount0Min Minimum amount of token0 with slippage applied
+     * @return amount1Min Minimum amount of token1 with slippage applied
+     */
+    function calculateMinAmounts(
+        uint256 amount0Desired,
+        uint256 amount1Desired,
+        uint256 slippageBps
+    ) external pure returns (uint256 amount0Min, uint256 amount1Min) {
+        require(slippageBps <= 10000, "Slippage too high"); // Max 100% slippage
+        amount0Min = (amount0Desired * (10000 - slippageBps)) / 10000;
+        amount1Min = (amount1Desired * (10000 - slippageBps)) / 10000;
+    }
+
+    /**
+     * @dev Calculate a reasonable deadline (current time + buffer)
+     * @param bufferSeconds Number of seconds to add to current time
+     * @return deadline The calculated deadline timestamp
+     */
+    function calculateDeadline(uint256 bufferSeconds) external view returns (uint256 deadline) {
+        require(bufferSeconds <= 3600, "Buffer too long"); // Max 1 hour
+        deadline = block.timestamp + bufferSeconds;
     }
 }
